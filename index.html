@@ -158,6 +158,16 @@ button:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
   .qhint{display:none}
 }
 
+
+/* ---- 允许复制题目内容（桌面 Cmd/Ctrl+C，移动端长按） ---- */
+.stem,.ptext,.feedback,.fbmini,.opt,.opt .txt{
+  -webkit-user-select:text;user-select:text;-webkit-touch-callout:default;
+}
+.qhead{flex-wrap:wrap}
+.copybtn{font-size:12.5px;font-weight:700;color:var(--muted);background:#eef2fa;
+  border:1px solid var(--line);border-radius:8px;padding:5px 10px;cursor:pointer;white-space:nowrap}
+.copybtn:hover{color:var(--primary);border-color:#c7d8fc;background:var(--primary-soft)}
+.copybtn:active{transform:scale(.96)}
 </style>
 </head>
 <body>
@@ -225,6 +235,7 @@ button:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
         <span class="tag" id="qSection">经济金融基础知识</span>
         <span class="tag score" id="qScore">0.5 分</span>
         <button class="flagbtn" id="btnFlag">☆ 标记</button>
+        <button class="copybtn" id="btnCopy" title="复制本题题干、选项、答案与解析">复制本题</button>
       </div>
       <details class="passage" id="passageBox" open hidden>
         <summary>阅读原文（点击展开 / 收起）</summary>
@@ -392,7 +403,7 @@ function renderQuestion(){
     } else if(isSel) btn.classList.add('sel');
     btn.innerHTML='<span class="letter">'+L+'</span><span class="txt"></span>';
     btn.querySelector('.txt').textContent=q.options[L]||'';
-    btn.onclick=()=>pick(L);
+    btn.onclick=()=>{ if(window.getSelection && window.getSelection().toString().trim()) return; pick(L); };
     ob.appendChild(btn);
   });
 
@@ -525,8 +536,38 @@ $('btnConfirm').onclick=()=>confirmAnswer();
 $('rBack').onclick=()=>{ S.showReport=false; save(); render(); };
 $('rRestart').onclick=resetAll;
 $('btnToggle').onclick=()=>$('side').classList.toggle('collapsed');
+
+/* ---- 一键复制本题（含题干/选项/答案/解析/阅读原文） ---- */
+function copyCurrentQuestion(){
+  const q=BYID[S.current]; if(!q) return;
+  const yr=(String((DATA.meta&&DATA.meta.source)||'').match(/20\d{2}/)||[''])[0];
+  const psg=passageOf(q.id), L=[];
+  L.push((yr?yr+' 年 · ':'')+'第 '+q.id+' 题（'+(q.type==='multi'?'多选题':'单选题')+'）');
+  if(psg) L.push('【阅读原文】\n'+psg);
+  L.push('【题干】'+q.stem);
+  ['A','B','C','D'].forEach(x=>L.push(x+'. '+(q.options[x]||'')));
+  L.push('【答案】'+q.answer);
+  L.push('【解析】'+q.analysis);
+  const txt=L.join('\n');
+  const done=()=>toast('已复制：题干 / 选项 / 答案 / 解析');
+  const fail=()=>toast('自动复制失败，请长按文字手动复制');
+  if(navigator.clipboard && window.isSecureContext){
+    navigator.clipboard.writeText(txt).then(done).catch(()=>legacyCopyText(txt,done,fail));
+  } else legacyCopyText(txt,done,fail);
+}
+function legacyCopyText(txt,done,fail){
+  const ta=document.createElement('textarea');
+  ta.value=txt; ta.setAttribute('readonly','');
+  ta.style.cssText='position:fixed;top:0;left:0;opacity:0;pointer-events:none';
+  document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0,txt.length);
+  let ok=false; try{ ok=document.execCommand('copy'); }catch(e){}
+  document.body.removeChild(ta); ok?done():fail();
+}
+$('btnCopy').onclick=copyCurrentQuestion;
+
 document.addEventListener('keydown',e=>{
   if(e.target && /INPUT|TEXTAREA/.test(e.target.tagName)) return;
+  if(e.metaKey||e.ctrlKey||e.altKey) return;  /* 不拦截系统快捷键：复制/全选/粘贴/撤销 */
   const k=e.key.toLowerCase();
   if('abcd'.includes(k) && k.length===1){ pick(k.toUpperCase()); e.preventDefault(); return; }
   if('1234'.includes(k) && k.length===1){ pick('ABCD'[+k-1]); e.preventDefault(); return; }
